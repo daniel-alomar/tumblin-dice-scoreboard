@@ -104,6 +104,7 @@
         .btn-secondary { background: #95a5a6; }
         .btn-danger { background: var(--danger); }
         .btn-outline { background: transparent; border: 2px solid #e0e0e0; color: var(--text); }
+        .btn-sm { padding: 8px 12px; font-size: 0.8rem; width: auto; }
 
         /* WIZARD */
         .player-input-row {
@@ -127,7 +128,6 @@
             transition: transform 0.2s;
         }
         .color-dot:active { transform: scale(0.9); }
-        /* Icona de canvi de color */
         .color-dot::after {
             content: '↻';
             color: white;
@@ -160,6 +160,20 @@
             border: 1px solid #ffe0b2;
             cursor: pointer;
             text-align: left;
+        }
+
+        .count-selector {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        .count-selector .btn {
+            margin: 0;
+            padding: 10px;
+            flex: 1;
+            min-width: 40px;
         }
 
         /* GAME HUD */
@@ -304,6 +318,31 @@
         #confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
 
         .app-version { font-family: monospace; opacity: 0.6; font-size: 0.75rem; }
+
+        /* STATS & HISTORY */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+        }
+        .stat-label { font-size: 0.75rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1.4rem; font-weight: 800; color: var(--primary); margin: 4px 0; }
+        .stat-player { font-size: 0.85rem; font-weight: 600; color: var(--secondary); }
+        .stat-date { font-size: 0.7rem; color: #bdc3c7; }
+
+        .history-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: white; border-bottom: 1px solid #f0f0f0;
+        }
+        .history-item:first-child { border-top-left-radius: 8px; border-top-right-radius: 8px; }
+        .history-item:last-child { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; border-bottom: none; }
+
+        .delete-btn { color: #e74c3c; background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
     </style>
 </head>
 <body>
@@ -319,17 +358,14 @@
      * Nick: Xiuxiueig
      * Date: 2026-01-24
      */
-
-    // --- VERSION CONTROL ---
     const now = new Date();
-    // Format: YYYY.MM.DD-HHMM
-    const APP_VERSION = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    const APP_VERSION = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
     const APP_NICK = "Xiuxiueig";
 
     // 1. FIREBASE IMPORTS
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // 2. CONFIGURATION
     const firebaseConfig = typeof __firebase_config !== 'undefined'
@@ -359,7 +395,7 @@
             welcome_title: "Benvingut/da",
             welcome_subtitle: "El marcador digital per a les teves partides.",
             btn_new_game: "Nova Partida",
-            btn_history: "Historial (Aviat)",
+            btn_history: "Estadístiques i Historial",
             status_demo: "Mode DEMO",
             footer_text: "Creat per l'Equip Sènior",
             wiz_title: "Configuració",
@@ -378,14 +414,20 @@
             game_over: "Partida Finalitzada!",
             winner_is: "Guanyador:",
             btn_home: "Tornar a l'Inici",
-            err_max_dice: "Màxim 4 daus per ronda!"
+            err_max_dice: "Màxim 4 daus per ronda!",
+            st_high_win: "Victòria Èpica",
+            st_low_win: "Victòria Ajustada",
+            st_high_loss: "Millor Perdedor",
+            st_low_loss: "Desastre Total",
+            st_no_data: "No hi ha prou dades encara.",
+            hist_title: "Historial de Partides"
         },
         es: {
             app_title: "Tumblin' Dice",
             welcome_title: "Bienvenido/a",
             welcome_subtitle: "El marcador digital para tus partidas.",
             btn_new_game: "Nueva Partida",
-            btn_history: "Historial (Pronto)",
+            btn_history: "Estadísticas e Historial",
             status_demo: "Modo DEMO",
             footer_text: "Creado por el Equipo Senior",
             wiz_title: "Configuración",
@@ -404,14 +446,20 @@
             game_over: "¡Partida Finalizada!",
             winner_is: "Ganador:",
             btn_home: "Volver al Inicio",
-            err_max_dice: "¡Máximo 4 dados por ronda!"
+            err_max_dice: "¡Máximo 4 dados por ronda!",
+            st_high_win: "Victoria Épica",
+            st_low_win: "Victoria Ajustada",
+            st_high_loss: "Mejor Perdedor",
+            st_low_loss: "Desastre Total",
+            st_no_data: "No hay datos suficientes aún.",
+            hist_title: "Historial de Partidas"
         },
         en: {
             app_title: "Tumblin' Dice",
             welcome_title: "Welcome",
             welcome_subtitle: "Digital scoreboard for your matches.",
             btn_new_game: "New Game",
-            btn_history: "History (Soon)",
+            btn_history: "Stats & History",
             status_demo: "DEMO Mode",
             footer_text: "Created by the Senior Team",
             wiz_title: "Setup",
@@ -430,7 +478,13 @@
             game_over: "Game Over!",
             winner_is: "Winner:",
             btn_home: "Back to Home",
-            err_max_dice: "Max 4 dice per round!"
+            err_max_dice: "Max 4 dice per round!",
+            st_high_win: "Highest Victory",
+            st_low_win: "Lowest Victory",
+            st_high_loss: "Best Loser",
+            st_low_loss: "Worst Loss",
+            st_no_data: "Not enough data yet.",
+            hist_title: "Match History"
         }
     };
 
@@ -459,27 +513,18 @@
     const i18n = new I18n();
 
     // 4. APP STATE & LOGIC
-    // Extended palette for color picking
-    const PALETTE = [
-        '#e74c3c', // Red
-        '#2ecc71', // Green
-        '#3498db', // Blue
-        '#34495e', // Black/Grey
-        '#9b59b6', // Purple
-        '#f39c12', // Orange
-        '#1abc9c', // Teal
-        '#e91e63'  // Pink
-    ];
+    const PALETTE = ['#e74c3c', '#2ecc71', '#3498db', '#34495e', '#9b59b6', '#f39c12', '#1abc9c', '#e91e63'];
 
     const state = {
         user: null,
         view: 'dashboard',
         wizard: {
             count: 4,
-            players: [], // { name, color }
+            players: [],
             variantNeg: false
         },
-        game: null
+        game: null,
+        history: [] // For storing fetched history
     };
 
     // --- PERSISTENCE HELPERS ---
@@ -488,13 +533,13 @@
         if (raw) {
             try {
                 const data = JSON.parse(raw);
-                if (data.names) state.wizard.players = data.names; // Array of objects
+                if (data.names) state.wizard.players = data.names;
                 if (typeof data.variantNeg !== 'undefined') state.wizard.variantNeg = data.variantNeg;
+                if (data.count) state.wizard.count = data.count; // Load count
             } catch(e) {}
         }
-
-        // Ensure initial players have colors if loaded empty
-        for(let i=0; i<4; i++) {
+        // Ensure initial players up to 6
+        for(let i=0; i<6; i++) {
             if(!state.wizard.players[i]) {
                 state.wizard.players[i] = { name: '', color: PALETTE[i % PALETTE.length] };
             }
@@ -502,17 +547,63 @@
     }
 
     function saveSettings() {
-        // Capture current names from inputs if we are in wizard
-        const playersToSave = state.wizard.players.map(p => ({
-            name: p.name,
-            color: p.color
-        }));
-
+        const playersToSave = state.wizard.players.map(p => ({ name: p.name, color: p.color }));
         const data = {
             names: playersToSave,
-            variantNeg: state.wizard.variantNeg
+            variantNeg: state.wizard.variantNeg,
+            count: state.wizard.count // Save count
         };
         localStorage.setItem('td_settings', JSON.stringify(data));
+    }
+
+    // --- FIRESTORE ACTIONS ---
+    async function saveGameToFirestore() {
+        if(isMock || !state.user) return;
+        try {
+            const gameData = {
+                date: new Date().toISOString(),
+                players: state.game.players.map(p => ({
+                    name: p.name,
+                    color: p.color,
+                    totalScore: p.totalScore
+                })),
+                rounds: state.game.maxRounds,
+                winnerId: [...state.game.players].sort((a,b)=>b.totalScore-a.totalScore)[0].id
+            };
+
+            const colRef = collection(db, 'users', state.user.uid, 'games');
+            await addDoc(colRef, gameData);
+            console.log("Game saved!");
+        } catch(e) {
+            console.error("Error saving game:", e);
+        }
+    }
+
+    async function fetchHistory() {
+        if(isMock || !state.user) return;
+        try {
+            const colRef = collection(db, 'users', state.user.uid, 'games');
+            const q = query(colRef, orderBy('date', 'desc'), limit(50));
+            const snapshot = await getDocs(q);
+            state.history = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            update();
+        } catch(e) {
+            console.error("Error fetching history:", e);
+        }
+    }
+
+    async function deleteGameFromFirestore(gameId) {
+        if(!confirm("Segur que vols esborrar aquesta partida?")) return;
+        if(isMock || !state.user) return;
+        try {
+            await deleteDoc(doc(db, 'users', state.user.uid, 'games', gameId));
+            // Update local state
+            state.history = state.history.filter(g => g.id !== gameId);
+            update();
+        } catch(e) { console.error(e); }
     }
 
     // --- RENDERERS ---
@@ -539,10 +630,81 @@
                     ${state.user ? `<small style="color:#bbb">ID: ${state.user.uid.slice(0,4)}...</small>` : ''}
                 </div>
                 <button onclick="window.navTo('wizard')" class="btn">${i18n.t('btn_new_game')}</button>
-                <button class="btn btn-secondary" disabled>${i18n.t('btn_history')}</button>
+                <button onclick="window.navTo('history')" class="btn btn-secondary">${i18n.t('btn_history')}</button>
                 <div style="text-align:center; margin-top:2rem; font-size:0.8rem; color:#ccc;">
                     ${i18n.t('status_demo')} | <span class="app-version">v${APP_VERSION}</span> | ${APP_NICK}
                 </div>
+            </main>
+        `;
+    }
+
+    function renderHistory() {
+        // Calculate Statistics
+        let highWin = { score: -9999, name: '-', date: '' };
+        let lowWin = { score: 9999, name: '-', date: '' };
+        let highLoss = { score: -9999, name: '-', date: '' };
+        let lowLoss = { score: 9999, name: '-', date: '' };
+        let hasData = false;
+
+        state.history.forEach(g => {
+            if(!g.players || g.players.length === 0) return;
+            hasData = true;
+            // Find winner (sort desc)
+            const sorted = [...g.players].sort((a,b) => b.totalScore - a.totalScore);
+            const winner = sorted[0];
+            const losers = sorted.slice(1);
+            const dateStr = new Date(g.date).toLocaleDateString();
+
+            // High Win
+            if (winner.totalScore > highWin.score) highWin = { ...winner, date: dateStr };
+            // Low Win
+            if (winner.totalScore < lowWin.score) lowWin = { ...winner, date: dateStr };
+
+            losers.forEach(l => {
+                // High Loss (Best loser)
+                if (l.totalScore > highLoss.score) highLoss = { ...l, date: dateStr };
+                // Low Loss (Worst score)
+                if (l.totalScore < lowLoss.score) lowLoss = { ...l, date: dateStr };
+            });
+        });
+
+        const statCard = (label, data) => `
+            <div class="stat-card">
+                <div class="stat-label">${label}</div>
+                <div class="stat-value">${hasData ? data.score : '-'}</div>
+                <div class="stat-player">${hasData ? data.name : ''}</div>
+                <div class="stat-date">${hasData ? data.date : ''}</div>
+            </div>
+        `;
+
+        const listHtml = state.history.map(g => {
+            const d = new Date(g.date);
+            const winner = g.players.reduce((prev, curr) => (prev.totalScore > curr.totalScore) ? prev : curr);
+            return `
+                <div class="history-item">
+                    <div>
+                        <div style="font-weight:bold; font-size:0.9rem;">${d.toLocaleDateString()} ${d.toLocaleTimeString().slice(0,5)}</div>
+                        <div style="font-size:0.8rem; color:#7f8c8d;">🏆 ${winner.name} (${winner.totalScore} pts)</div>
+                    </div>
+                    <button class="delete-btn" onclick="window.delGame('${g.id}')">🗑️</button>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <main>
+                <div class="stats-grid">
+                    ${statCard(i18n.t('st_high_win'), highWin)}
+                    ${statCard(i18n.t('st_low_win'), lowWin)}
+                    ${statCard(i18n.t('st_high_loss'), highLoss)}
+                    ${statCard(i18n.t('st_low_loss'), lowLoss)}
+                </div>
+
+                <h3 style="margin-bottom:10px;">${i18n.t('hist_title')}</h3>
+                <div class="card" style="padding:0; text-align:left; overflow:hidden">
+                    ${listHtml || `<div style="padding:20px; text-align:center; color:#999">${i18n.t('st_no_data')}</div>`}
+                </div>
+                <button onclick="window.navTo('dashboard')" class="btn btn-outline" style="margin-top:auto">${i18n.t('btn_home')}</button>
             </main>
         `;
     }
@@ -569,10 +731,10 @@
                     <h3 style="margin-top:0">${i18n.t('wiz_title')}</h3>
 
                     <label style="display:block;margin-bottom:8px;font-weight:bold">${i18n.t('wiz_p_count')}</label>
-                    <div style="display:flex; gap:10px; margin-bottom:1.5rem;">
-                        ${[2,3,4].map(n => `
+                    <div class="count-selector">
+                        ${[2,3,4,5,6].map(n => `
                             <button class="btn btn-outline"
-                                style="${state.wizard.count===n ? 'background:var(--primary);color:white;border-color:var(--primary)' : 'padding:10px'}"
+                                style="${state.wizard.count===n ? 'background:var(--primary);color:white;border-color:var(--primary)' : ''}"
                                 onclick="window.setWizCount(${n})">${n}</button>
                         `).join('')}
                     </div>
@@ -583,7 +745,6 @@
                     </label>
 
                     <label style="display:block;margin-bottom:8px;font-weight:bold">${i18n.t('wiz_names')}</label>
-                    <small style="display:block;margin-bottom:8px;color:#888">Clica el cercle per canviar color</small>
                     ${inputs}
                 </div>
                 <button onclick="window.startGame()" class="btn">${i18n.t('wiz_start')}</button>
@@ -595,12 +756,9 @@
     function renderGame() {
         const g = state.game;
         const p = g.players[g.activePIdx];
-
-        // Calculate scores
         const pScores = g.scores[g.round]?.[p.id] || [];
         const roundTotal = pScores.reduce((acc, s) => acc + s.pts, 0);
 
-        // Generate HUD
         const hudHtml = g.players.map((pl, idx) => `
             <div class="hud-player ${idx === g.activePIdx ? 'active' : ''}">
                 <div class="hud-dot" style="background-color:${pl.color}"></div>
@@ -608,13 +766,11 @@
             </div>
         `).join('');
 
-        // Generate Dice Slots
         const slotsHtml = [0,1,2,3].map(i => {
             const hasDie = pScores[i];
-            if (hasDie) {
-                return `<div class="slot filled" style="--color:${p.color}">${hasDie.pts}</div>`;
-            }
-            return `<div class="slot"></div>`;
+            return hasDie
+                ? `<div class="slot filled" style="--color:${p.color}">${hasDie.pts}</div>`
+                : `<div class="slot"></div>`;
         }).join('');
 
         const diceHtml = pScores.map((s, i) => `
@@ -625,15 +781,9 @@
             </div>
         `).join('');
 
-        // Determine available multipliers based on Variant Rules
-        let multipliers = [1,2,3,4]; // 1-4 always present
-        if (g.variants.negativeZone) {
-            multipliers.unshift(-1); // Add -1 at start
-            // 0 is excluded
-        } else {
-            multipliers.push(0); // Add 0 if no negative zone
-            multipliers.sort((a,b)=>a-b); // Ensure order 0,1,2,3,4
-        }
+        let multipliers = [1,2,3,4];
+        if (g.variants.negativeZone) multipliers.unshift(-1);
+        else { multipliers.push(0); multipliers.sort((a,b)=>a-b); }
 
         return `
             <main style="height:100vh; padding-bottom:0; overflow:hidden">
@@ -653,39 +803,19 @@
                 </div>
 
                 <div class="dice-slots-container">${slotsHtml}</div>
-
-                <div class="dice-area">
-                    <div class="dice-list">${diceHtml}</div>
-                </div>
+                <div class="dice-area"><div class="dice-list">${diceHtml}</div></div>
 
                 <div style="display:flex; gap:10px; padding-bottom:10px">
-                    <button class="btn btn-secondary" style="flex:1" onclick="window.undoRoll()" ${pScores.length===0?'disabled':''}>
-                        ↩ ${i18n.t('btn_undo')}
-                    </button>
-                    <button class="btn" style="flex:1; background:var(--primary)" onclick="window.nextTurn()">
-                        ${i18n.t('btn_next')} ➜
-                    </button>
+                    <button class="btn btn-secondary" style="flex:1" onclick="window.undoRoll()" ${pScores.length===0?'disabled':''}>↩ ${i18n.t('btn_undo')}</button>
+                    <button class="btn" style="flex:1; background:var(--primary)" onclick="window.nextTurn()">${i18n.t('btn_next')} ➜</button>
                 </div>
 
                 <div class="keypad-container">
                     <div class="keypad">
-                        ${[1,2,3,4,5,6].map(d => `
-                            <button class="key-btn die-btn ${g.inputDie===d?'selected':''}"
-                                onclick="window.selectDie(${d})">🎲 ${d}</button>
-                        `).join('')}
-
-                        ${multipliers.map(m => `
-                            <button class="key-btn ${m < 0 ? 'mult-neg' : 'mult'} ${g.inputMult===m?'selected':''}"
-                                onclick="window.selectMult(${m})">${m}×</button>
-                        `).join('')}
-
+                        ${[1,2,3,4,5,6].map(d => `<button class="key-btn die-btn ${g.inputDie===d?'selected':''}" onclick="window.selectDie(${d})">🎲 ${d}</button>`).join('')}
+                        ${multipliers.map(m => `<button class="key-btn ${m < 0 ? 'mult-neg' : 'mult'} ${g.inputMult===m?'selected':''}" onclick="window.selectMult(${m})">${m}×</button>`).join('')}
                         <div style="flex:1"></div>
-
-                        <button class="key-btn action-add" id="btnAdd"
-                            onclick="window.addRoll()"
-                            ${(g.inputDie!==null && g.inputMult!==null) ? '' : 'disabled'}>
-                            ${i18n.t('btn_add_roll')}
-                        </button>
+                        <button class="key-btn action-add" id="btnAdd" onclick="window.addRoll()" ${(g.inputDie!==null && g.inputMult!==null) ? '' : 'disabled'}>${i18n.t('btn_add_roll')}</button>
                     </div>
                 </div>
             </main>
@@ -720,38 +850,25 @@
     }
 
     // --- CONTROLLERS ---
-
     window.setLang = (l) => i18n.setLocale(l);
-    window.navTo = (v) => { state.view = v; update(); };
-    window.setWizCount = (n) => { state.wizard.count = n; update(); };
-
-    window.toggleVarNeg = (val) => {
-        state.wizard.variantNeg = val;
-        saveSettings(); // Save immediately
+    window.navTo = (v) => {
+        state.view = v;
+        if(v === 'history') fetchHistory();
         update();
     };
-
-    window.updateName = (idx, val) => {
-        state.wizard.players[idx].name = val;
-        // Don't save on every keystroke, wait for start game
-    };
+    window.setWizCount = (n) => { state.wizard.count = n; update(); };
+    window.toggleVarNeg = (val) => { state.wizard.variantNeg = val; saveSettings(); update(); };
+    window.updateName = (idx, val) => { state.wizard.players[idx].name = val; };
+    window.delGame = (id) => deleteGameFromFirestore(id);
 
     window.cycleColor = (idx) => {
-        // Find current colors used by ACTIVE players (based on count)
         const count = state.wizard.count;
         const usedColors = new Set();
-        for (let i = 0; i < count; i++) {
-            if (i !== idx) { // Exclude self
-                usedColors.add(state.wizard.players[i].color);
-            }
-        }
-
+        for (let i = 0; i < count; i++) { if (i !== idx) usedColors.add(state.wizard.players[i].color); }
         const currentColor = state.wizard.players[idx].color;
         let colorIdx = PALETTE.indexOf(currentColor);
-
-        // Find next available
         let safe = 0;
-        while(safe < 20) { // Safety break
+        while(safe < 20) {
             colorIdx = (colorIdx + 1) % PALETTE.length;
             const nextColor = PALETTE[colorIdx];
             if (!usedColors.has(nextColor)) {
@@ -764,8 +881,7 @@
     };
 
     window.startGame = () => {
-        saveSettings(); // Save names and config
-
+        saveSettings();
         const players = [];
         for(let i=0; i<state.wizard.count; i++) {
             const p = state.wizard.players[i];
@@ -776,7 +892,6 @@
                 totalScore: 0
             });
         }
-
         state.game = {
             id: Date.now().toString(),
             round: 1,
@@ -794,33 +909,19 @@
 
     window.selectDie = (v) => { state.game.inputDie = v; update(); };
     window.selectMult = (v) => { state.game.inputMult = v; update(); };
-
     window.addRoll = () => {
         const g = state.game;
         if(g.inputDie===null || g.inputMult===null) return;
-
         const pid = g.players[g.activePIdx].id;
         if(!g.scores[g.round]) g.scores[g.round] = {};
         if(!g.scores[g.round][pid]) g.scores[g.round][pid] = [];
-
-        if (g.scores[g.round][pid].length >= 4) {
-            alert(i18n.t('err_max_dice'));
-            return;
-        }
-
+        if (g.scores[g.round][pid].length >= 4) { alert(i18n.t('err_max_dice')); return; }
         const pts = g.inputDie * g.inputMult;
-        g.scores[g.round][pid].push({
-            die: g.inputDie,
-            mult: g.inputMult,
-            pts: pts
-        });
-
+        g.scores[g.round][pid].push({ die: g.inputDie, mult: g.inputMult, pts: pts });
         g.players[g.activePIdx].totalScore += pts;
-        g.inputDie = null;
-        g.inputMult = null;
+        g.inputDie = null; g.inputMult = null;
         update();
     };
-
     window.undoRoll = () => {
         const g = state.game;
         const pid = g.players[g.activePIdx].id;
@@ -831,7 +932,6 @@
             update();
         }
     };
-
     window.nextTurn = () => {
         const g = state.game;
         g.activePIdx++;
@@ -839,12 +939,12 @@
             g.activePIdx = 0;
             g.round++;
             if(g.round > g.maxRounds) {
+                saveGameToFirestore();
                 state.view = 'summary';
                 launchConfetti();
             }
         }
-        g.inputDie = null;
-        g.inputMult = null;
+        g.inputDie = null; g.inputMult = null;
         update();
     };
 
@@ -858,10 +958,11 @@
         else if (state.view === 'wizard') app.innerHTML += renderWizard();
         else if (state.view === 'game') app.innerHTML += renderGame();
         else if (state.view === 'summary') app.innerHTML += renderSummary();
+        else if (state.view === 'history') app.innerHTML += renderHistory();
     }
 
     // --- INIT ---
-    loadSettings(); // Load from localStorage on boot
+    loadSettings();
     i18n.subscribe(update);
     if (!isMock && auth) {
         onAuthStateChanged(auth, u => {
