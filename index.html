@@ -333,7 +333,14 @@
 
     // 2. CONFIGURATION
     const firebaseConfig = typeof __firebase_config !== 'undefined'
-        ? JSON.parse(__firebase_config) : { apiKey: "mock" };
+        ? JSON.parse(__firebase_config) : {
+        apiKey: "AIzaSyCrHHtV7I4M_EL8bFMykZTMpBq-ymNSSDg",
+        authDomain: "tumblin-dice-scoreboard.firebaseapp.com",
+        projectId: "tumblin-dice-scoreboard",
+        storageBucket: "tumblin-dice-scoreboard.firebasestorage.app",
+        messagingSenderId: "6654053135",
+        appId: "1:6654053135:web:0075baf2508a3e78878c7a"
+         };
 
     let auth, db, isMock = false;
     try {
