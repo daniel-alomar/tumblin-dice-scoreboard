@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tumblin' Dice Scoreboard</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #e67e22;
+            --accent: #27ae60;
+            --bg: #f8f9fa;
+            --text: #212529;
+            --white: #ffffff;
+            --danger: #e74c3c;
+            --radius: 12px;
+            --shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #app {
+            max-width: 500px;
+            margin: 0 auto;
+            background: var(--white);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* HEADER */
+        header {
+            padding: 1rem;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        header h1 { font-size: 1.2rem; margin: 0; display: flex; align-items: center; gap: 8px; }
+
+        .lang-select {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .lang-select option { color: black; }
+
+        /* MAIN CONTENT */
+        main {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* UTILS */
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid #eee;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: var(--radius);
+            border: none;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            background: var(--secondary);
+            color: white;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:active:not(:disabled) { opacity: 0.8; transform: scale(0.98); }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; opacity: 0.7; }
+        .btn-secondary { background: #95a5a6; }
+        .btn-danger { background: var(--danger); }
+        .btn-outline { background: transparent; border: 2px solid #e0e0e0; color: var(--text); }
+
+        /* WIZARD */
+        .player-input-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 8px;
+        }
+        .color-dot {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s;
+        }
+        .color-dot:active { transform: scale(0.9); }
+        /* Icona de canvi de color */
+        .color-dot::after {
+            content: '↻';
+            color: white;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            opacity: 0.7;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .input-name {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            background: white;
+        }
+        .input-name:focus { outline: 2px solid var(--secondary); border-color: transparent; }
+
+        .variant-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff3e0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border: 1px solid #ffe0b2;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        /* GAME HUD */
+        .game-hud {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 8px 4px;
+            margin-bottom: 1rem;
+            scrollbar-width: none;
+        }
+        .game-hud::-webkit-scrollbar { display: none; }
+
+        .hud-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0.6;
+            transition: all 0.3s;
+            min-width: 50px;
+        }
+        .hud-player.active { opacity: 1; transform: scale(1.1); }
+        .hud-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 4px;
+        }
+        .hud-player.active .hud-dot { border-color: var(--primary); }
+        .hud-score { font-size: 0.8rem; font-weight: bold; color: var(--primary); }
+
+        /* ACTIVE PLAYER CARD */
+        .active-player-card {
+            background: #f1f3f5;
+            border-left: 8px solid var(--active-color, #ccc);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .score-big { font-size: 2.5rem; font-weight: 800; color: var(--primary); line-height: 1; }
+
+        /* DICE SLOTS */
+        .dice-slots-container { display: flex; gap: 8px; justify-content: center; margin-bottom: 1rem; }
+        .slot {
+            width: 40px; height: 40px;
+            border-radius: 8px;
+            background: #eee;
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #aaa;
+        }
+        .slot.filled {
+            background: white;
+            border: 2px solid var(--secondary);
+            color: var(--primary);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-color: var(--color);
+        }
+
+        /* DICE LIST AREA */
+        .dice-area {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 1rem;
+            overflow-y: auto;
+            border: 1px inset #eee;
+        }
+        .dice-list { display: flex; gap: 8px; flex-wrap: wrap; align-content: flex-start; }
+        .die-chip {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        /* KEYPAD GRID */
+        .keypad-container { margin-top: auto; background: white; padding-top: 10px; border-top: 1px solid #eee; }
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .key-btn {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 14px 0;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--primary);
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .key-btn:active { background: #f0f0f0; transform: scale(0.95); }
+        .die-btn.selected {
+            background: var(--primary); color: white; border-color: var(--primary);
+            box-shadow: 0 2px 5px rgba(44, 62, 80, 0.3);
+        }
+        .mult { color: var(--secondary); background: #fffbf7; border-color: #fae5d3; }
+        .mult.selected {
+            background: var(--secondary); color: white; border-color: var(--secondary);
+            box-shadow: 0 2px 5px rgba(230, 126, 34, 0.3);
+        }
+        .mult-neg { color: var(--danger); background: #ffebee; border-color: #ffcdd2; }
+        .mult-neg.selected { background: var(--danger); color: white; border-color: var(--danger); }
+
+        .action-add {
+            grid-column: span 3;
+            background: var(--accent); color: white; border: none;
+            margin-top: 5px; font-size: 1.1rem; text-transform: uppercase;
+            letter-spacing: 1px; box-shadow: 0 4px 0 #219150; margin-bottom: 4px;
+        }
+        .action-add:active { transform: translateY(4px); box-shadow: none; }
+        .action-add:disabled { background: #bdc3c7; box-shadow: none; cursor: default; transform: none; }
+
+        /* PODIUM */
+        .podium-item { display: flex; justify-content: space-between; padding: 1rem; border-bottom: 1px solid #eee; align-items: center; }
+        .rank-badge {
+            width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; border-radius: 50%; margin-right: 10px; font-size: 1.1rem;
+        }
+        .rank-1 { background: #f1c40f; color: white; }
+        .rank-2 { background: #95a5a6; color: white; }
+        .rank-3 { background: #cd7f32; color: white; }
+
+        #confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
+
+        .app-version { font-family: monospace; opacity: 0.6; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+
+<div id="app"></div>
+<canvas id="confetti"></canvas>
+
+<script type="module">
+    /**
+     * TUMBLIN' DICE SCOREBOARD
+     * ------------------------
+     * Author: Daniel Alomar Claramonte
+     * Nick: Xiuxiueig
+     * Date: 2026-01-24
+     */
+
+    // --- VERSION CONTROL ---
+    const now = new Date();
+    // Format: YYYY.MM.DD-HHMM
+    const APP_VERSION = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    const APP_NICK = "Xiuxiueig";
+
+    // 1. FIREBASE IMPORTS
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // 2. CONFIGURATION
+    const firebaseConfig = typeof __firebase_config !== 'undefined'
+        ? JSON.parse(__firebase_config) : { apiKey: "mock" };
+
+    let auth, db, isMock = false;
+    try {
+        if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "mock") {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            signInAnonymously(auth).catch(e => console.error("Auth Error", e));
+        } else { isMock = true; }
+    } catch(e) { isMock = true; }
+
+    // 3. I18N SYSTEM
+    const DICTIONARIES = {
+        ca: {
+            app_title: "Tumblin' Dice",
+            welcome_title: "Benvingut/da",
+            welcome_subtitle: "El marcador digital per a les teves partides.",
+            btn_new_game: "Nova Partida",
+            btn_history: "Historial (Aviat)",
+            status_demo: "Mode DEMO",
+            footer_text: "Creat per l'Equip Sènior",
+            wiz_title: "Configuració",
+            wiz_p_count: "Quants jugadors?",
+            wiz_names: "Noms i Colors",
+            wiz_start: "COMENÇAR PARTIDA",
+            wiz_cancel: "Cancel·lar",
+            wiz_var_neg: "Habilitar zona penalització (-1x)",
+            p_name_placeholder: "Jugador",
+            game_round: "Ronda",
+            game_current_player: "Torn de",
+            btn_add_roll: "AFEGIR TIRADA",
+            btn_next: "Següent Jugador",
+            btn_undo: "Desfer",
+            score_total: "Total",
+            game_over: "Partida Finalitzada!",
+            winner_is: "Guanyador:",
+            btn_home: "Tornar a l'Inici",
+            err_max_dice: "Màxim 4 daus per ronda!"
+        },
+        es: {
+            app_title: "Tumblin' Dice",
+            welcome_title: "Bienvenido/a",
+            welcome_subtitle: "El marcador digital para tus partidas.",
+            btn_new_game: "Nueva Partida",
+            btn_history: "Historial (Pronto)",
+            status_demo: "Modo DEMO",
+            footer_text: "Creado por el Equipo Senior",
+            wiz_title: "Configuración",
+            wiz_p_count: "¿Cuántos jugadores?",
+            wiz_names: "Nombres y Colores",
+            wiz_start: "EMPEZAR PARTIDA",
+            wiz_cancel: "Cancelar",
+            wiz_var_neg: "Habilitar zona penalización (-1x)",
+            p_name_placeholder: "Jugador",
+            game_round: "Ronda",
+            game_current_player: "Turno de",
+            btn_add_roll: "AÑADIR TIRADA",
+            btn_next: "Siguiente Jugador",
+            btn_undo: "Deshacer",
+            score_total: "Total",
+            game_over: "¡Partida Finalizada!",
+            winner_is: "Ganador:",
+            btn_home: "Volver al Inicio",
+            err_max_dice: "¡Máximo 4 dados por ronda!"
+        },
+        en: {
+            app_title: "Tumblin' Dice",
+            welcome_title: "Welcome",
+            welcome_subtitle: "Digital scoreboard for your matches.",
+            btn_new_game: "New Game",
+            btn_history: "History (Soon)",
+            status_demo: "DEMO Mode",
+            footer_text: "Created by the Senior Team",
+            wiz_title: "Setup",
+            wiz_p_count: "How many players?",
+            wiz_names: "Names & Colors",
+            wiz_start: "START GAME",
+            wiz_cancel: "Cancel",
+            wiz_var_neg: "Enable penalty zone (-1x)",
+            p_name_placeholder: "Player",
+            game_round: "Round",
+            game_current_player: "Turn of",
+            btn_add_roll: "ADD ROLL",
+            btn_next: "Next Player",
+            btn_undo: "Undo",
+            score_total: "Total",
+            game_over: "Game Over!",
+            winner_is: "Winner:",
+            btn_home: "Back to Home",
+            err_max_dice: "Max 4 dice per round!"
+        }
+    };
+
+    class I18n {
+        constructor() {
+            this.locale = this.detectLanguage();
+            this.observers = [];
+        }
+        detectLanguage() {
+            const stored = localStorage.getItem('td_lang');
+            if (stored && DICTIONARIES[stored]) return stored;
+            const browser = navigator.language.split('-')[0];
+            return DICTIONARIES[browser] ? browser : 'ca';
+        }
+        t(key) { return DICTIONARIES[this.locale][key] || key; }
+        setLocale(l) {
+            if (DICTIONARIES[l]) {
+                this.locale = l;
+                localStorage.setItem('td_lang', l);
+                this.notify();
+            }
+        }
+        subscribe(cb) { this.observers.push(cb); }
+        notify() { this.observers.forEach(cb => cb()); }
+    }
+    const i18n = new I18n();
+
+    // 4. APP STATE & LOGIC
+    // Extended palette for color picking
+    const PALETTE = [
+        '#e74c3c', // Red
+        '#2ecc71', // Green
+        '#3498db', // Blue
+        '#34495e', // Black/Grey
+        '#9b59b6', // Purple
+        '#f39c12', // Orange
+        '#1abc9c', // Teal
+        '#e91e63'  // Pink
+    ];
+
+    const state = {
+        user: null,
+        view: 'dashboard',
+        wizard: {
+            count: 4,
+            players: [], // { name, color }
+            variantNeg: false
+        },
+        game: null
+    };
+
+    // --- PERSISTENCE HELPERS ---
+    function loadSettings() {
+        const raw = localStorage.getItem('td_settings');
+        if (raw) {
+            try {
+                const data = JSON.parse(raw);
+                if (data.names) state.wizard.players = data.names; // Array of objects
+                if (typeof data.variantNeg !== 'undefined') state.wizard.variantNeg = data.variantNeg;
+            } catch(e) {}
+        }
+
+        // Ensure initial players have colors if loaded empty
+        for(let i=0; i<4; i++) {
+            if(!state.wizard.players[i]) {
+                state.wizard.players[i] = { name: '', color: PALETTE[i % PALETTE.length] };
+            }
+        }
+    }
+
+    function saveSettings() {
+        // Capture current names from inputs if we are in wizard
+        const playersToSave = state.wizard.players.map(p => ({
+            name: p.name,
+            color: p.color
+        }));
+
+        const data = {
+            names: playersToSave,
+            variantNeg: state.wizard.variantNeg
+        };
+        localStorage.setItem('td_settings', JSON.stringify(data));
+    }
+
+    // --- RENDERERS ---
+
+    function renderHeader() {
+        return `
+            <header>
+                <h1>🎲 ${i18n.t('app_title')}</h1>
+                <select onchange="window.setLang(this.value)" class="lang-select">
+                    <option value="ca" ${i18n.locale==='ca'?'selected':''}>CA</option>
+                    <option value="es" ${i18n.locale==='es'?'selected':''}>ES</option>
+                    <option value="en" ${i18n.locale==='en'?'selected':''}>EN</option>
+                </select>
+            </header>
+        `;
+    }
+
+    function renderDashboard() {
+        return `
+            <main style="justify-content:center;">
+                <div class="card">
+                    <h2>${i18n.t('welcome_title')}</h2>
+                    <p style="color:#666">${i18n.t('welcome_subtitle')}</p>
+                    ${state.user ? `<small style="color:#bbb">ID: ${state.user.uid.slice(0,4)}...</small>` : ''}
+                </div>
+                <button onclick="window.navTo('wizard')" class="btn">${i18n.t('btn_new_game')}</button>
+                <button class="btn btn-secondary" disabled>${i18n.t('btn_history')}</button>
+                <div style="text-align:center; margin-top:2rem; font-size:0.8rem; color:#ccc;">
+                    ${i18n.t('status_demo')} | <span class="app-version">v${APP_VERSION}</span> | ${APP_NICK}
+                </div>
+            </main>
+        `;
+    }
+
+    function renderWizard() {
+        let inputs = '';
+        for(let i=0; i<state.wizard.count; i++) {
+            const p = state.wizard.players[i];
+            inputs += `
+                <div class="player-input-row">
+                    <div class="color-dot" style="background:${p.color}"
+                         onclick="window.cycleColor(${i})" title="Canvia color"></div>
+                    <input type="text" class="input-name" id="p_name_${i}"
+                        value="${p.name}"
+                        oninput="window.updateName(${i}, this.value)"
+                        placeholder="${i18n.t('p_name_placeholder')} ${i+1}" autocomplete="off">
+                </div>
+            `;
+        }
+
+        return `
+            <main>
+                <div class="card" style="text-align:left">
+                    <h3 style="margin-top:0">${i18n.t('wiz_title')}</h3>
+
+                    <label style="display:block;margin-bottom:8px;font-weight:bold">${i18n.t('wiz_p_count')}</label>
+                    <div style="display:flex; gap:10px; margin-bottom:1.5rem;">
+                        ${[2,3,4].map(n => `
+                            <button class="btn btn-outline"
+                                style="${state.wizard.count===n ? 'background:var(--primary);color:white;border-color:var(--primary)' : 'padding:10px'}"
+                                onclick="window.setWizCount(${n})">${n}</button>
+                        `).join('')}
+                    </div>
+
+                    <label class="variant-toggle">
+                        <input type="checkbox" id="wiz_var_neg" ${state.wizard.variantNeg ? 'checked' : ''} onchange="window.toggleVarNeg(this.checked)">
+                        <span style="font-weight:bold">${i18n.t('wiz_var_neg')}</span>
+                    </label>
+
+                    <label style="display:block;margin-bottom:8px;font-weight:bold">${i18n.t('wiz_names')}</label>
+                    <small style="display:block;margin-bottom:8px;color:#888">Clica el cercle per canviar color</small>
+                    ${inputs}
+                </div>
+                <button onclick="window.startGame()" class="btn">${i18n.t('wiz_start')}</button>
+                <button onclick="window.navTo('dashboard')" class="btn btn-outline" style="border:none">${i18n.t('wiz_cancel')}</button>
+            </main>
+        `;
+    }
+
+    function renderGame() {
+        const g = state.game;
+        const p = g.players[g.activePIdx];
+
+        // Calculate scores
+        const pScores = g.scores[g.round]?.[p.id] || [];
+        const roundTotal = pScores.reduce((acc, s) => acc + s.pts, 0);
+
+        // Generate HUD
+        const hudHtml = g.players.map((pl, idx) => `
+            <div class="hud-player ${idx === g.activePIdx ? 'active' : ''}">
+                <div class="hud-dot" style="background-color:${pl.color}"></div>
+                <div class="hud-score">${pl.totalScore}</div>
+            </div>
+        `).join('');
+
+        // Generate Dice Slots
+        const slotsHtml = [0,1,2,3].map(i => {
+            const hasDie = pScores[i];
+            if (hasDie) {
+                return `<div class="slot filled" style="--color:${p.color}">${hasDie.pts}</div>`;
+            }
+            return `<div class="slot"></div>`;
+        }).join('');
+
+        const diceHtml = pScores.map((s, i) => `
+            <div class="die-chip">
+                <span>🎲${s.die}</span>
+                <span style="color:#aaa">×</span>
+                <span style="color:${s.mult < 0 ? 'var(--danger)' : 'var(--secondary)'}; font-weight:bold">${s.mult}x</span>
+            </div>
+        `).join('');
+
+        // Determine available multipliers based on Variant Rules
+        let multipliers = [1,2,3,4]; // 1-4 always present
+        if (g.variants.negativeZone) {
+            multipliers.unshift(-1); // Add -1 at start
+            // 0 is excluded
+        } else {
+            multipliers.push(0); // Add 0 if no negative zone
+            multipliers.sort((a,b)=>a-b); // Ensure order 0,1,2,3,4
+        }
+
+        return `
+            <main style="height:100vh; padding-bottom:0; overflow:hidden">
+                <div class="game-header">
+                    <div class="round-badge">${i18n.t('game_round')} ${g.round} / ${g.maxRounds}</div>
+                    <button onclick="if(confirm('Sortir?')) window.navTo('dashboard')" style="background:none;border:none;font-size:1.5rem;color:#ccc">×</button>
+                </div>
+
+                <div class="game-hud">${hudHtml}</div>
+
+                <div class="active-player-card" style="--active-color:${p.color}">
+                    <div>
+                        <div style="font-size:0.8rem; text-transform:uppercase; color:#7f8c8d; letter-spacing:1px">${i18n.t('game_current_player')}</div>
+                        <div style="font-size:1.4rem; font-weight:bold; margin-top:4px">${p.name}</div>
+                    </div>
+                    <div class="score-big">${roundTotal}</div>
+                </div>
+
+                <div class="dice-slots-container">${slotsHtml}</div>
+
+                <div class="dice-area">
+                    <div class="dice-list">${diceHtml}</div>
+                </div>
+
+                <div style="display:flex; gap:10px; padding-bottom:10px">
+                    <button class="btn btn-secondary" style="flex:1" onclick="window.undoRoll()" ${pScores.length===0?'disabled':''}>
+                        ↩ ${i18n.t('btn_undo')}
+                    </button>
+                    <button class="btn" style="flex:1; background:var(--primary)" onclick="window.nextTurn()">
+                        ${i18n.t('btn_next')} ➜
+                    </button>
+                </div>
+
+                <div class="keypad-container">
+                    <div class="keypad">
+                        ${[1,2,3,4,5,6].map(d => `
+                            <button class="key-btn die-btn ${g.inputDie===d?'selected':''}"
+                                onclick="window.selectDie(${d})">🎲 ${d}</button>
+                        `).join('')}
+
+                        ${multipliers.map(m => `
+                            <button class="key-btn ${m < 0 ? 'mult-neg' : 'mult'} ${g.inputMult===m?'selected':''}"
+                                onclick="window.selectMult(${m})">${m}×</button>
+                        `).join('')}
+
+                        <div style="flex:1"></div>
+
+                        <button class="key-btn action-add" id="btnAdd"
+                            onclick="window.addRoll()"
+                            ${(g.inputDie!==null && g.inputMult!==null) ? '' : 'disabled'}>
+                            ${i18n.t('btn_add_roll')}
+                        </button>
+                    </div>
+                </div>
+            </main>
+        `;
+    }
+
+    function renderSummary() {
+        const sorted = [...state.game.players].sort((a,b) => b.totalScore - a.totalScore);
+
+        return `
+            <main>
+                <div class="card">
+                    <h2 style="margin:0">${i18n.t('game_over')}</h2>
+                    <p>${i18n.t('winner_is')}</p>
+                    <h1 style="font-size:3rem; color:var(--secondary); margin:1rem 0">${sorted[0].name}</h1>
+                </div>
+                <div class="card" style="padding:0; text-align:left; overflow:hidden">
+                    ${sorted.map((p,i) => `
+                        <div class="podium-item">
+                            <div style="display:flex; align-items:center">
+                                <div class="rank-badge rank-${i+1}">${i+1}</div>
+                                <div style="width:12px; height:12px; background:${p.color}; border-radius:50%; margin-right:8px"></div>
+                                <span style="font-weight:600">${p.name}</span>
+                            </div>
+                            <span style="font-weight:bold; font-size:1.2rem; color:var(--primary)">${p.totalScore}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <button onclick="window.navTo('dashboard')" class="btn">${i18n.t('btn_home')}</button>
+            </main>
+        `;
+    }
+
+    // --- CONTROLLERS ---
+
+    window.setLang = (l) => i18n.setLocale(l);
+    window.navTo = (v) => { state.view = v; update(); };
+    window.setWizCount = (n) => { state.wizard.count = n; update(); };
+
+    window.toggleVarNeg = (val) => {
+        state.wizard.variantNeg = val;
+        saveSettings(); // Save immediately
+        update();
+    };
+
+    window.updateName = (idx, val) => {
+        state.wizard.players[idx].name = val;
+        // Don't save on every keystroke, wait for start game
+    };
+
+    window.cycleColor = (idx) => {
+        // Find current colors used by ACTIVE players (based on count)
+        const count = state.wizard.count;
+        const usedColors = new Set();
+        for (let i = 0; i < count; i++) {
+            if (i !== idx) { // Exclude self
+                usedColors.add(state.wizard.players[i].color);
+            }
+        }
+
+        const currentColor = state.wizard.players[idx].color;
+        let colorIdx = PALETTE.indexOf(currentColor);
+
+        // Find next available
+        let safe = 0;
+        while(safe < 20) { // Safety break
+            colorIdx = (colorIdx + 1) % PALETTE.length;
+            const nextColor = PALETTE[colorIdx];
+            if (!usedColors.has(nextColor)) {
+                state.wizard.players[idx].color = nextColor;
+                break;
+            }
+            safe++;
+        }
+        update();
+    };
+
+    window.startGame = () => {
+        saveSettings(); // Save names and config
+
+        const players = [];
+        for(let i=0; i<state.wizard.count; i++) {
+            const p = state.wizard.players[i];
+            players.push({
+                id: `p${i}`,
+                name: p.name || `${i18n.t('p_name_placeholder')} ${i+1}`,
+                color: p.color,
+                totalScore: 0
+            });
+        }
+
+        state.game = {
+            id: Date.now().toString(),
+            round: 1,
+            maxRounds: 4,
+            players: players,
+            variants: { negativeZone: state.wizard.variantNeg },
+            activePIdx: 0,
+            scores: {},
+            inputDie: null,
+            inputMult: null
+        };
+        state.view = 'game';
+        update();
+    };
+
+    window.selectDie = (v) => { state.game.inputDie = v; update(); };
+    window.selectMult = (v) => { state.game.inputMult = v; update(); };
+
+    window.addRoll = () => {
+        const g = state.game;
+        if(g.inputDie===null || g.inputMult===null) return;
+
+        const pid = g.players[g.activePIdx].id;
+        if(!g.scores[g.round]) g.scores[g.round] = {};
+        if(!g.scores[g.round][pid]) g.scores[g.round][pid] = [];
+
+        if (g.scores[g.round][pid].length >= 4) {
+            alert(i18n.t('err_max_dice'));
+            return;
+        }
+
+        const pts = g.inputDie * g.inputMult;
+        g.scores[g.round][pid].push({
+            die: g.inputDie,
+            mult: g.inputMult,
+            pts: pts
+        });
+
+        g.players[g.activePIdx].totalScore += pts;
+        g.inputDie = null;
+        g.inputMult = null;
+        update();
+    };
+
+    window.undoRoll = () => {
+        const g = state.game;
+        const pid = g.players[g.activePIdx].id;
+        const list = g.scores[g.round]?.[pid];
+        if(list && list.length > 0) {
+            const last = list.pop();
+            g.players[g.activePIdx].totalScore -= last.pts;
+            update();
+        }
+    };
+
+    window.nextTurn = () => {
+        const g = state.game;
+        g.activePIdx++;
+        if(g.activePIdx >= g.players.length) {
+            g.activePIdx = 0;
+            g.round++;
+            if(g.round > g.maxRounds) {
+                state.view = 'summary';
+                launchConfetti();
+            }
+        }
+        g.inputDie = null;
+        g.inputMult = null;
+        update();
+    };
+
+    function launchConfetti() { console.log("Party time!"); }
+
+    function update() {
+        const app = document.getElementById('app');
+        app.innerHTML = '';
+        if (state.view !== 'game') app.innerHTML += renderHeader();
+        if (state.view === 'dashboard') app.innerHTML += renderDashboard();
+        else if (state.view === 'wizard') app.innerHTML += renderWizard();
+        else if (state.view === 'game') app.innerHTML += renderGame();
+        else if (state.view === 'summary') app.innerHTML += renderSummary();
+    }
+
+    // --- INIT ---
+    loadSettings(); // Load from localStorage on boot
+    i18n.subscribe(update);
+    if (!isMock && auth) {
+        onAuthStateChanged(auth, u => {
+            state.user = u;
+            update();
+        });
+    } else { update(); }
+
+</script>
+</body>
+</html>
