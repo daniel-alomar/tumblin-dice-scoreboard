@@ -191,11 +191,15 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            opacity: 0.6;
+            opacity: 0.5;
             transition: all 0.3s;
             min-width: 50px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
         }
-        .hud-player.active { opacity: 1; transform: scale(1.1); }
+        .hud-player:active { transform: scale(0.9); }
+        .hud-player.active { opacity: 1; transform: scale(1.1); background: #f1f3f5; }
         .hud-dot {
             width: 24px;
             height: 24px;
@@ -343,6 +347,33 @@
         .history-item:last-child { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; border-bottom: none; }
 
         .delete-btn { color: #e74c3c; background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
+
+        /* SCORE TABLE */
+        .score-table-container {
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            background: white;
+            border-radius: var(--radius);
+            border: 1px solid #eee;
+        }
+        .score-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 0.9rem; }
+        .score-table th { background: var(--primary); color: white; padding: 8px; font-size: 0.8rem; }
+        .score-table td { padding: 10px 8px; border-bottom: 1px solid #eee; font-weight: 500; }
+        .score-table tr:last-child td { border-bottom: none; }
+        .score-table .p-name { text-align: left; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .score-table .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        /* MODAL */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white; padding: 1.5rem; border-radius: var(--radius);
+            width: 90%; max-width: 450px; max-height: 90vh; overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body>
@@ -356,7 +387,7 @@
      * ------------------------
      * Author: Daniel Alomar Claramonte
      * Nick: Xiuxiueig
-     * Date: 2026-01-24
+     * Date: 2026-05-26
      */
     const now = new Date();
     const APP_VERSION = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
@@ -367,7 +398,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // 2. CONFIGURATION
+   // 2. CONFIGURATION
     const firebaseConfig = typeof __firebase_config !== 'undefined'
         ? JSON.parse(__firebase_config) : {
         apiKey: "AIzaSyCrHHtV7I4M_EL8bFMykZTMpBq-ymNSSDg",
@@ -378,13 +409,24 @@
         appId: "1:6654053135:web:0075baf2508a3e78878c7a"
          };
 
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'tumblin-dice';
+
     let auth, db, isMock = false;
     try {
         if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "mock") {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            signInAnonymously(auth).catch(e => console.error("Auth Error", e));
+
+            // Required Authentication Pattern per Canvas Environment
+            const initAuth = async () => {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            };
+            initAuth().catch(e => console.error("Auth Error", e));
         } else { isMock = true; }
     } catch(e) { isMock = true; }
 
@@ -409,6 +451,8 @@
             game_current_player: "Torn de",
             btn_add_roll: "AFEGIR TIRADA",
             btn_next: "Següent Jugador",
+            btn_next_round: "Següent Ronda",
+            btn_finish_game: "Finalitzar Partida",
             btn_undo: "Desfer",
             score_total: "Total",
             game_over: "Partida Finalitzada!",
@@ -420,7 +464,9 @@
             st_high_loss: "Millor Perdedor",
             st_low_loss: "Desastre Total",
             st_no_data: "No hi ha prou dades encara.",
-            hist_title: "Historial de Partides"
+            hist_title: "Historial de Partides",
+            table_title: "Taula de Puntuacions",
+            btn_close: "Tancar"
         },
         es: {
             app_title: "Tumblin' Dice",
@@ -441,6 +487,8 @@
             game_current_player: "Turno de",
             btn_add_roll: "AÑADIR TIRADA",
             btn_next: "Siguiente Jugador",
+            btn_next_round: "Siguiente Ronda",
+            btn_finish_game: "Finalizar Partida",
             btn_undo: "Deshacer",
             score_total: "Total",
             game_over: "¡Partida Finalizada!",
@@ -452,7 +500,9 @@
             st_high_loss: "Mejor Perdedor",
             st_low_loss: "Desastre Total",
             st_no_data: "No hay datos suficientes aún.",
-            hist_title: "Historial de Partidas"
+            hist_title: "Historial de Partidas",
+            table_title: "Tabla de Puntuaciones",
+            btn_close: "Cerrar"
         },
         en: {
             app_title: "Tumblin' Dice",
@@ -473,6 +523,8 @@
             game_current_player: "Turn of",
             btn_add_roll: "ADD ROLL",
             btn_next: "Next Player",
+            btn_next_round: "Next Round",
+            btn_finish_game: "Finish Game",
             btn_undo: "Undo",
             score_total: "Total",
             game_over: "Game Over!",
@@ -484,7 +536,9 @@
             st_high_loss: "Best Loser",
             st_low_loss: "Worst Loss",
             st_no_data: "Not enough data yet.",
-            hist_title: "Match History"
+            hist_title: "Match History",
+            table_title: "Score Sheet",
+            btn_close: "Close"
         }
     };
 
@@ -518,13 +572,10 @@
     const state = {
         user: null,
         view: 'dashboard',
-        wizard: {
-            count: 4,
-            players: [],
-            variantNeg: false
-        },
+        wizard: { count: 4, players: [], variantNeg: false },
         game: null,
-        history: [] // For storing fetched history
+        history: [],
+        showTableModal: false
     };
 
     // --- PERSISTENCE HELPERS ---
@@ -535,10 +586,9 @@
                 const data = JSON.parse(raw);
                 if (data.names) state.wizard.players = data.names;
                 if (typeof data.variantNeg !== 'undefined') state.wizard.variantNeg = data.variantNeg;
-                if (data.count) state.wizard.count = data.count; // Load count
+                if (data.count) state.wizard.count = data.count;
             } catch(e) {}
         }
-        // Ensure initial players up to 6
         for(let i=0; i<6; i++) {
             if(!state.wizard.players[i]) {
                 state.wizard.players[i] = { name: '', color: PALETTE[i % PALETTE.length] };
@@ -549,64 +599,79 @@
     function saveSettings() {
         const playersToSave = state.wizard.players.map(p => ({ name: p.name, color: p.color }));
         const data = {
-            names: playersToSave,
-            variantNeg: state.wizard.variantNeg,
-            count: state.wizard.count // Save count
+            names: playersToSave, variantNeg: state.wizard.variantNeg, count: state.wizard.count
         };
         localStorage.setItem('td_settings', JSON.stringify(data));
     }
 
-    // --- FIRESTORE ACTIONS ---
+    // --- FIRESTORE ACTIONS (Using Strict Paths) ---
     async function saveGameToFirestore() {
         if(isMock || !state.user) return;
         try {
             const gameData = {
                 date: new Date().toISOString(),
                 players: state.game.players.map(p => ({
-                    name: p.name,
-                    color: p.color,
-                    totalScore: p.totalScore
+                    name: p.name, color: p.color, totalScore: p.totalScore
                 })),
                 rounds: state.game.maxRounds,
                 winnerId: [...state.game.players].sort((a,b)=>b.totalScore-a.totalScore)[0].id
             };
-
-            const colRef = collection(db, 'users', state.user.uid, 'games');
+            const colRef = collection(db, 'artifacts', appId, 'users', state.user.uid, 'games');
             await addDoc(colRef, gameData);
-            console.log("Game saved!");
-        } catch(e) {
-            console.error("Error saving game:", e);
-        }
+        } catch(e) { console.error(e); }
     }
 
     async function fetchHistory() {
         if(isMock || !state.user) return;
         try {
-            const colRef = collection(db, 'users', state.user.uid, 'games');
+            const colRef = collection(db, 'artifacts', appId, 'users', state.user.uid, 'games');
             const q = query(colRef, orderBy('date', 'desc'), limit(50));
             const snapshot = await getDocs(q);
-            state.history = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            state.history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             update();
-        } catch(e) {
-            console.error("Error fetching history:", e);
-        }
+        } catch(e) { console.error(e); }
     }
 
     async function deleteGameFromFirestore(gameId) {
         if(!confirm("Segur que vols esborrar aquesta partida?")) return;
         if(isMock || !state.user) return;
         try {
-            await deleteDoc(doc(db, 'users', state.user.uid, 'games', gameId));
-            // Update local state
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'games', gameId));
             state.history = state.history.filter(g => g.id !== gameId);
             update();
         } catch(e) { console.error(e); }
     }
 
     // --- RENDERERS ---
+
+    function renderScoreTableHTML() {
+        const g = state.game;
+        if (!g) return '';
+
+        let ths = `<th>Jugador</th>`;
+        for (let r = 1; r <= g.maxRounds; r++) { ths += `<th>R${r}</th>`; }
+        ths += `<th>${i18n.t('score_total')}</th>`;
+
+        let trs = g.players.map(p => {
+            let tds = `<td class="p-name"><span class="dot" style="background:${p.color}"></span>${p.name}</td>`;
+            for (let r = 1; r <= g.maxRounds; r++) {
+                const rolls = g.scores[r]?.[p.id] || [];
+                const roundPts = rolls.reduce((acc, s) => acc + s.pts, 0);
+                tds += `<td>${roundPts}</td>`;
+            }
+            tds += `<td style="font-weight:bold; color:var(--primary)">${p.totalScore}</td>`;
+            return `<tr>${tds}</tr>`;
+        }).join('');
+
+        return `
+            <div class="score-table-container">
+                <table class="score-table">
+                    <thead><tr>${ths}</tr></thead>
+                    <tbody>${trs}</tbody>
+                </table>
+            </div>
+        `;
+    }
 
     function renderHeader() {
         return `
@@ -639,7 +704,6 @@
     }
 
     function renderHistory() {
-        // Calculate Statistics
         let highWin = { score: -9999, name: '-', date: '' };
         let lowWin = { score: 9999, name: '-', date: '' };
         let highLoss = { score: -9999, name: '-', date: '' };
@@ -649,21 +713,16 @@
         state.history.forEach(g => {
             if(!g.players || g.players.length === 0) return;
             hasData = true;
-            // Find winner (sort desc)
             const sorted = [...g.players].sort((a,b) => b.totalScore - a.totalScore);
             const winner = sorted[0];
             const losers = sorted.slice(1);
             const dateStr = new Date(g.date).toLocaleDateString();
 
-            // High Win
             if (winner.totalScore > highWin.score) highWin = { ...winner, date: dateStr };
-            // Low Win
             if (winner.totalScore < lowWin.score) lowWin = { ...winner, date: dateStr };
 
             losers.forEach(l => {
-                // High Loss (Best loser)
                 if (l.totalScore > highLoss.score) highLoss = { ...l, date: dateStr };
-                // Low Loss (Worst score)
                 if (l.totalScore < lowLoss.score) lowLoss = { ...l, date: dateStr };
             });
         });
@@ -699,7 +758,6 @@
                     ${statCard(i18n.t('st_high_loss'), highLoss)}
                     ${statCard(i18n.t('st_low_loss'), lowLoss)}
                 </div>
-
                 <h3 style="margin-bottom:10px;">${i18n.t('hist_title')}</h3>
                 <div class="card" style="padding:0; text-align:left; overflow:hidden">
                     ${listHtml || `<div style="padding:20px; text-align:center; color:#999">${i18n.t('st_no_data')}</div>`}
@@ -715,12 +773,8 @@
             const p = state.wizard.players[i];
             inputs += `
                 <div class="player-input-row">
-                    <div class="color-dot" style="background:${p.color}"
-                         onclick="window.cycleColor(${i})" title="Canvia color"></div>
-                    <input type="text" class="input-name" id="p_name_${i}"
-                        value="${p.name}"
-                        oninput="window.updateName(${i}, this.value)"
-                        placeholder="${i18n.t('p_name_placeholder')} ${i+1}" autocomplete="off">
+                    <div class="color-dot" style="background:${p.color}" onclick="window.cycleColor(${i})" title="Canvia color"></div>
+                    <input type="text" class="input-name" id="p_name_${i}" value="${p.name}" oninput="window.updateName(${i}, this.value)" placeholder="${i18n.t('p_name_placeholder')} ${i+1}" autocomplete="off">
                 </div>
             `;
         }
@@ -729,21 +783,16 @@
             <main>
                 <div class="card" style="text-align:left">
                     <h3 style="margin-top:0">${i18n.t('wiz_title')}</h3>
-
                     <label style="display:block;margin-bottom:8px;font-weight:bold">${i18n.t('wiz_p_count')}</label>
                     <div class="count-selector">
                         ${[2,3,4,5,6].map(n => `
-                            <button class="btn btn-outline"
-                                style="${state.wizard.count===n ? 'background:var(--primary);color:white;border-color:var(--primary)' : ''}"
-                                onclick="window.setWizCount(${n})">${n}</button>
+                            <button class="btn btn-outline" style="${state.wizard.count===n ? 'background:var(--primary);color:white;border-color:var(--primary)' : ''}" onclick="window.setWizCount(${n})">${n}</button>
                         `).join('')}
                     </div>
-
                     <label class="variant-toggle">
                         <input type="checkbox" id="wiz_var_neg" ${state.wizard.variantNeg ? 'checked' : ''} onchange="window.toggleVarNeg(this.checked)">
                         <span style="font-weight:bold">${i18n.t('wiz_var_neg')}</span>
                     </label>
-
                     <label style="display:block;margin-bottom:8px;font-weight:bold">${i18n.t('wiz_names')}</label>
                     ${inputs}
                 </div>
@@ -760,7 +809,7 @@
         const roundTotal = pScores.reduce((acc, s) => acc + s.pts, 0);
 
         const hudHtml = g.players.map((pl, idx) => `
-            <div class="hud-player ${idx === g.activePIdx ? 'active' : ''}">
+            <div class="hud-player ${idx === g.activePIdx ? 'active' : ''}" onclick="window.setActivePlayer(${idx})" title="Toca per canviar de jugador">
                 <div class="hud-dot" style="background-color:${pl.color}"></div>
                 <div class="hud-score">${pl.totalScore}</div>
             </div>
@@ -785,11 +834,24 @@
         if (g.variants.negativeZone) multipliers.unshift(-1);
         else { multipliers.push(0); multipliers.sort((a,b)=>a-b); }
 
+        const isLastInRound = (g.activePIdx === (g.startingPlayerIdx + g.players.length - 1) % g.players.length);
+        const isLastRound = (g.round === g.maxRounds);
+
+        let nextBtnText = i18n.t('btn_next');
+        let nextBtnColor = "var(--primary)";
+        if (isLastInRound) {
+            nextBtnText = isLastRound ? i18n.t('btn_finish_game') : i18n.t('btn_next_round');
+            nextBtnColor = "var(--accent)";
+        }
+
         return `
             <main style="height:100vh; padding-bottom:0; overflow:hidden">
                 <div class="game-header">
                     <div class="round-badge">${i18n.t('game_round')} ${g.round} / ${g.maxRounds}</div>
-                    <button onclick="if(confirm('Sortir?')) window.navTo('dashboard')" style="background:none;border:none;font-size:1.5rem;color:#ccc">×</button>
+                    <div>
+                        <button onclick="window.toggleTableModal()" style="background:none;border:none;font-size:1.2rem;margin-right:10px;cursor:pointer" title="${i18n.t('table_title')}">📊</button>
+                        <button onclick="if(confirm('Sortir?')) window.navTo('dashboard')" style="background:none;border:none;font-size:1.5rem;color:#ccc;cursor:pointer">×</button>
+                    </div>
                 </div>
 
                 <div class="game-hud">${hudHtml}</div>
@@ -807,7 +869,7 @@
 
                 <div style="display:flex; gap:10px; padding-bottom:10px">
                     <button class="btn btn-secondary" style="flex:1" onclick="window.undoRoll()" ${pScores.length===0?'disabled':''}>↩ ${i18n.t('btn_undo')}</button>
-                    <button class="btn" style="flex:1; background:var(--primary)" onclick="window.nextTurn()">${i18n.t('btn_next')} ➜</button>
+                    <button class="btn" style="flex:1; background:${nextBtnColor}" onclick="window.nextTurn()">${nextBtnText} ➜</button>
                 </div>
 
                 <div class="keypad-container">
@@ -832,6 +894,7 @@
                     <p>${i18n.t('winner_is')}</p>
                     <h1 style="font-size:3rem; color:var(--secondary); margin:1rem 0">${sorted[0].name}</h1>
                 </div>
+
                 <div class="card" style="padding:0; text-align:left; overflow:hidden">
                     ${sorted.map((p,i) => `
                         <div class="podium-item">
@@ -844,7 +907,11 @@
                         </div>
                     `).join('')}
                 </div>
-                <button onclick="window.navTo('dashboard')" class="btn">${i18n.t('btn_home')}</button>
+
+                <h3 style="margin-top: 1rem; margin-bottom: 0.5rem; text-align: left;">${i18n.t('table_title')}</h3>
+                ${renderScoreTableHTML()}
+
+                <button onclick="window.navTo('dashboard')" class="btn" style="margin-top:1rem">${i18n.t('btn_home')}</button>
             </main>
         `;
     }
@@ -860,6 +927,11 @@
     window.toggleVarNeg = (val) => { state.wizard.variantNeg = val; saveSettings(); update(); };
     window.updateName = (idx, val) => { state.wizard.players[idx].name = val; };
     window.delGame = (id) => deleteGameFromFirestore(id);
+
+    window.toggleTableModal = () => {
+        state.showTableModal = !state.showTableModal;
+        update();
+    };
 
     window.cycleColor = (idx) => {
         const count = state.wizard.count;
@@ -885,23 +957,12 @@
         const players = [];
         for(let i=0; i<state.wizard.count; i++) {
             const p = state.wizard.players[i];
-            players.push({
-                id: `p${i}`,
-                name: p.name || `${i18n.t('p_name_placeholder')} ${i+1}`,
-                color: p.color,
-                totalScore: 0
-            });
+            players.push({ id: `p${i}`, name: p.name || `${i18n.t('p_name_placeholder')} ${i+1}`, color: p.color, totalScore: 0 });
         }
         state.game = {
-            id: Date.now().toString(),
-            round: 1,
-            maxRounds: 4,
-            players: players,
+            id: Date.now().toString(), round: 1, maxRounds: 4, players: players,
             variants: { negativeZone: state.wizard.variantNeg },
-            activePIdx: 0,
-            scores: {},
-            inputDie: null,
-            inputMult: null
+            startingPlayerIdx: 0, activePIdx: 0, scores: {}, inputDie: null, inputMult: null
         };
         state.view = 'game';
         update();
@@ -909,6 +970,8 @@
 
     window.selectDie = (v) => { state.game.inputDie = v; update(); };
     window.selectMult = (v) => { state.game.inputMult = v; update(); };
+    window.setActivePlayer = (idx) => { state.game.activePIdx = idx; state.game.inputDie = null; state.game.inputMult = null; update(); };
+
     window.addRoll = () => {
         const g = state.game;
         if(g.inputDie===null || g.inputMult===null) return;
@@ -922,6 +985,7 @@
         g.inputDie = null; g.inputMult = null;
         update();
     };
+
     window.undoRoll = () => {
         const g = state.game;
         const pid = g.players[g.activePIdx].id;
@@ -932,18 +996,25 @@
             update();
         }
     };
+
     window.nextTurn = () => {
         const g = state.game;
-        g.activePIdx++;
-        if(g.activePIdx >= g.players.length) {
-            g.activePIdx = 0;
-            g.round++;
-            if(g.round > g.maxRounds) {
+        const isLastInRound = (g.activePIdx === (g.startingPlayerIdx + g.players.length - 1) % g.players.length);
+
+        if (isLastInRound) {
+            if (g.round >= g.maxRounds) {
                 saveGameToFirestore();
                 state.view = 'summary';
                 launchConfetti();
+            } else {
+                g.round++;
+                g.startingPlayerIdx = (g.startingPlayerIdx + 1) % g.players.length;
+                g.activePIdx = g.startingPlayerIdx;
             }
+        } else {
+            g.activePIdx = (g.activePIdx + 1) % g.players.length;
         }
+
         g.inputDie = null; g.inputMult = null;
         update();
     };
@@ -954,9 +1025,25 @@
         const app = document.getElementById('app');
         app.innerHTML = '';
         if (state.view !== 'game') app.innerHTML += renderHeader();
+
         if (state.view === 'dashboard') app.innerHTML += renderDashboard();
         else if (state.view === 'wizard') app.innerHTML += renderWizard();
-        else if (state.view === 'game') app.innerHTML += renderGame();
+        else if (state.view === 'game') {
+            app.innerHTML += renderGame();
+
+            // Modal injection for Game View
+            if (state.showTableModal) {
+                app.innerHTML += `
+                    <div class="modal-overlay" onclick="window.toggleTableModal()">
+                        <div class="modal-content" onclick="event.stopPropagation()">
+                            <h3 style="margin-top:0">${i18n.t('table_title')}</h3>
+                            ${renderScoreTableHTML()}
+                            <button class="btn btn-outline" style="margin-top:1rem" onclick="window.toggleTableModal()">${i18n.t('btn_close')}</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
         else if (state.view === 'summary') app.innerHTML += renderSummary();
         else if (state.view === 'history') app.innerHTML += renderHistory();
     }
@@ -965,10 +1052,7 @@
     loadSettings();
     i18n.subscribe(update);
     if (!isMock && auth) {
-        onAuthStateChanged(auth, u => {
-            state.user = u;
-            update();
-        });
+        onAuthStateChanged(auth, u => { state.user = u; update(); });
     } else { update(); }
 
 </script>
