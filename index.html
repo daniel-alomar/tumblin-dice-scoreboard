@@ -2,8 +2,13 @@
 <html lang="ca">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tumblin' Dice Scoreboard</title>
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎲</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <style>
         :root {
             --primary: #2c3e50;
@@ -395,7 +400,7 @@
 
     // 1. FIREBASE IMPORTS
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
    // 2. CONFIGURATION
@@ -466,7 +471,10 @@
             st_no_data: "No hi ha prou dades encara.",
             hist_title: "Historial de Partides",
             table_title: "Taula de Puntuacions",
-            btn_close: "Tancar"
+            btn_close: "Tancar",
+            status_online: "En línia",
+            status_connecting: "Connectant...",
+            confirm_delete: "Segur que vols esborrar aquesta partida?"
         },
         es: {
             app_title: "Tumblin' Dice",
@@ -502,7 +510,10 @@
             st_no_data: "No hay datos suficientes aún.",
             hist_title: "Historial de Partidas",
             table_title: "Tabla de Puntuaciones",
-            btn_close: "Cerrar"
+            btn_close: "Cerrar",
+            status_online: "En línea",
+            status_connecting: "Conectando...",
+            confirm_delete: "¿Seguro que quieres borrar esta partida?"
         },
         en: {
             app_title: "Tumblin' Dice",
@@ -538,7 +549,10 @@
             st_no_data: "Not enough data yet.",
             hist_title: "Match History",
             table_title: "Score Sheet",
-            btn_close: "Close"
+            btn_close: "Close",
+            status_online: "Online",
+            status_connecting: "Connecting...",
+            confirm_delete: "Are you sure you want to delete this match?"
         }
     };
 
@@ -633,7 +647,7 @@
     }
 
     async function deleteGameFromFirestore(gameId) {
-        if(!confirm("Segur que vols esborrar aquesta partida?")) return;
+        if(!confirm(i18n.t('confirm_delete'))) return;
         if(isMock || !state.user) return;
         try {
             await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'games', gameId));
@@ -687,6 +701,10 @@
     }
 
     function renderDashboard() {
+        const statusText = isMock
+            ? i18n.t('status_demo')
+            : (state.user ? `🟢 ${i18n.t('status_online')}` : `🟡 ${i18n.t('status_connecting')}`);
+
         return `
             <main style="justify-content:center;">
                 <div class="card">
@@ -696,8 +714,8 @@
                 </div>
                 <button onclick="window.navTo('wizard')" class="btn">${i18n.t('btn_new_game')}</button>
                 <button onclick="window.navTo('history')" class="btn btn-secondary">${i18n.t('btn_history')}</button>
-                <div style="text-align:center; margin-top:2rem; font-size:0.8rem; color:#ccc;">
-                    ${i18n.t('status_demo')} | <span class="app-version">v${APP_VERSION}</span> | ${APP_NICK}
+                <div style="text-align:center; margin-top:2rem; font-size:0.8rem; color:#aaa;">
+                    <span>${statusText}</span> | <span class="app-version">v${APP_VERSION}</span> | ${APP_NICK}
                 </div>
             </main>
         `;
@@ -1019,7 +1037,17 @@
         update();
     };
 
-    function launchConfetti() { console.log("Party time!"); }
+    function launchConfetti() {
+        if (typeof confetti === 'function') {
+            confetti({
+                particleCount: 90,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        } else {
+            console.log("Party time!");
+        }
+    }
 
     function update() {
         const app = document.getElementById('app');
